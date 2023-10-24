@@ -1,17 +1,11 @@
-import logo from './logo.svg';
-import './App.css';
-import Splasher from './Components/Splasher';
-import Navbar from './Components/Navbar';
-import PunchBox from './Components/PunchBox';
-import PunchCountBox from './Components/PunchCountBox';
-
+import {Routes,Route} from "react-router-dom";
+import Home from "./Components/Home";
 function App() {
   return (
-    <>
-    <Splasher/>
-    <Navbar />
-    <PunchBox/>
-    <PunchCountBox/>
+    <>   
+    <Routes>
+      <Route path="/" element={<Home/>}/>
+    </Routes>   
     </>
   );
 }
