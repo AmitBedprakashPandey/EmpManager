@@ -6,17 +6,29 @@ import {
   getDoc,
   updateDoc,
   doc,
+  onSnapshot,
 } from "firebase/firestore";
-import { DB, Storage } from "../config/firebase.config";
+import { v4 as uuidv4 } from "uuid";
+import { Auth, DB, Storage } from"../config/firebase.config";
 import moment from "moment";
 import { FaCamera, FaCheck, FaFingerprint, FaUser, FaX } from "react-icons/fa6";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytesResumable,
+} from "firebase/storage";
+import { ClipLoader } from "react-spinners";
+import calculateTimeDuration from "../Functions/calculateTimeDuration";
 const cat = [{ name: "Bike" }, { name: "Train" }];
 
 // Confirmation Form
-const Punch = ({ close, submitIN }) => {    
+const Punch = ({ close, submitIN, spin }) => {
   return (
-    <div className="absolute top-0 self-auto z-50 bg-slate-200 w-screen h-screen">
-      <div className="bg-white w-72 mt-48 ml-14 p-3 border-2 border-black rounded-lg">
+    <div
+      className="absolute top-0 self-auto z-50 w-screen h-screen"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.80)" }}
+    >
+      <div className="bg-white w-72 mt-72 ml-14 p-3 border-2 border-black rounded-lg">
         <div className="flex justify-center p-3">
           <h1 className="text-2xl font-bold capitalize">Confirm Punch</h1>
         </div>
@@ -43,90 +55,128 @@ const PunchBoxModel = ({ close }) => {
   const [confirModel, setConfirModel] = useState(false);
   const [time, setTime] = useState(null);
   const [date, setDate] = useState(null);
-  const [kiloMetor,setKiloMetor] = useState(null);
   const [onPunch, setOnPunch] = useState("OUT");
+  const [startKm, setStartKm] = useState(null);
+  const [kiloMetor, setKiloMetor] = useState(null);
+  const [collectionId, setCollectionId] = useState(null);
   const [selectImg, setSelectImg] = useState(null);
-  const [startKm,setStartKm] = useState(null);
-  const [collectionId,setCollectionId] = useState(null);
-
+  const [startTime, setStartTime] = useState(null);  
+  const [loader, setloader] = useState(false);  
+  const [progres, setProgres] = useState(0);
+  const [duration, setDuration] = useState(null);
+  const [userId, setUserId] = useState(null);
   const Date = () => {
-    const date = moment().format("DD MMMM  YYYY");
-    localStorage.setItem("Date", date);
-    setDate(date);
-    return date;
+    return moment().format("DD MMMM  YYYY");
   };
   const Time = () => {
-    const time = moment().format("h:mm a");
-    localStorage.setItem("Time", time);
-    setTime(time);
-    return time;
+    return moment().format("h:mm A");
   };
-  useEffect(() => {  
-    const punch = localStorage.getItem('Punch');
-    const Start = localStorage.getItem('start');
-    const Sel = localStorage.getItem('sel');
-    const id = localStorage.getItem('id');    
-    if(punch){
+  useEffect(() => {
+    const punch = localStorage.getItem("Punch");
+    const Start = localStorage.getItem("start");
+    const Sel = localStorage.getItem("sel");
+    const id = localStorage.getItem("id");
+    const Time = localStorage.getItem("Time");
+    const Date = localStorage.getItem("Date");
+    console.log(Time, Date);
+    if (punch) {
+      setStartTime(Time);
+      setDate(Date);
       setOnPunch(punch);
       setStartKm(Start);
       setSelectCtg(Sel);
       setCollectionId(id);
-    }
-    console.log(collectionId);
-  }, []);
+      console.log("DocId :", collectionId);
+    }    
+  }, []);  
   const onSelected = (e) => {
     setSelectCtg(e.target.value);
   };
-  const clearInput = () => {
-  };
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const imageURL = URL.createObjectURL(file);
-      setSelectImg(imageURL);
+  const submitIN = async () => {
+    if (selectCtg === "Bike") {
+      if (!selectCtg || !startKm || !selectImg) {
+        return alert("Please Fill All Data !!!");
+      }
+      const storageRef = ref(Storage, `PunchImg/${uuidv4()}`);
+      const uploadImg = uploadBytesResumable(storageRef, selectImg);
+      uploadImg.on(
+        "state_changed",
+        (snapshot) => {
+          const progresPercent = Math.round(
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+          );
+          setProgres(progresPercent);
+        },
+        (error) => {
+          console.log(error);
+        },
+        () => {
+          getDownloadURL(uploadImg.snapshot.ref).then((url) => {
+            if (onPunch === "OUT") {
+              addDoc(punchRef, {
+                userid:'',                
+                date: Date(),
+                TrpMode: selectCtg,
+                startkm: startKm,
+                starttime: Time(),
+                startImg: url,
+                endkm: null,
+                endtime: null,
+                endImg: null,
+                totalkm: null,
+                duration: null,
+              })
+                .then((doc) => {
+                  localStorage.setItem("id", doc.id);
+                  localStorage.setItem("Punch", "IN");
+                  localStorage.setItem("start", startKm);
+                  localStorage.setItem("sel", selectCtg);
+                  localStorage.setItem("Time", Time());
+                  localStorage.setItem("Date", Date());
+                  setConfirModel(false);
+                  window.location.reload(false);
+                  close();
+                })
+                .catch((error) => alert("Upload Error"));
+            } else if (onPunch === "IN") {
+              const getdata = doc(punchRef, collectionId);
+              updateDoc(getdata, {
+                endkm: kiloMetor,
+                endtime: Time(),
+                endImg: url,
+                totalkm: kiloMetor - startKm,
+                duration: calculateTimeDuration(startTime, Time()),
+              }).then(() => {
+                localStorage.setItem("Punch", "OUT");
+                localStorage.removeItem("sel");
+                localStorage.removeItem("start");
+                localStorage.removeItem("id");
+                window.location.reload(false);
+                localStorage.setItem("Time", Time());
+                localStorage.setItem("Date", Date());
+                setConfirModel(false);
+                close();
+              });
+            }
+          });
+        }
+      );
+    } else if (selectCtg === "Train") {
     }
   };
-  const submitIN = async () => {
-    // Insert data in collection  
-    const data = {trpmode:selectCtg,punch:[{startKm:kiloMetor,time:Time(),date:Date(),img:selectImg}]};
-    if (onPunch === 'OUT') {
-      localStorage.setItem('Punch','IN');
-      localStorage.setItem('start',kiloMetor);
-      localStorage.setItem('sel',selectCtg);
-      localStorage.setItem('id',collectionId);      
-      await addDoc(punchRef,data).then((doc)=>{
-        localStorage.setItem('id',doc.id);
-        setConfirModel(false);        
-        window.location.reload(false);
-        close();
-      })
-      
-      
-    } else if(onPunch === 'IN'){
-      const data = {trpmode:selectCtg,punch:[{endKm:kiloMetor,time:Time(),date:Date(),img:selectImg}]};      
-      const getdata = doc(punchRef,collectionId);
-      updateDoc(getdata,data).then((doc)=>{
-        localStorage.setItem('Punch','OUT');
-        localStorage.removeItem('sel');
-        localStorage.removeItem('start');  
-        localStorage.removeItem('id');   
-        setConfirModel(false);        
-        window.location.reload(false);      
-        close();
-      })
- 
- 
-    }  
-  };
+
   return (
     <>
-      {confirModel && <Punch close={() => setConfirModel(false)} submitIN={submitIN} />}
+      {confirModel && (
+        <Punch close={() => setConfirModel(false)} submitIN={submitIN} />
+      )}
       <div
         className="absolute w-screen h-screen z-40 top-0"
+        style={{ backgroundColor: "rgba(0, 0, 0, 0.80)" }}
         onClick={close}
       ></div>
       <div className="flex justify-center">
-        <div className="absolute w-72 p-4 bg-white mt-20 rounded-lg shadow-lg z-40">
+        <div className="absolute w-72 p-4 bg-white mt-20 rounded-lg shadow shadow-slate-400 z-40">
           <FaX className="text-3xl w-6 h-5 absolute right-3" onClick={close} />
           <div className="py-3 font-bold ">
             <h4>Transportation Mode</h4>
@@ -148,88 +198,72 @@ const PunchBoxModel = ({ close }) => {
             </select>
           </div>
           {selectCtg === "Bike" ? (
-            onPunch === "OUT" ? (
-              <>
-                <div className="flex flex-col py-1">
-                  <input
-                  value={kiloMetor}
-                  onChange={(e)=>setKiloMetor(e.target.value)}
-                    type="tel"
-                    className="valid:outline-none border-b-2 py-2"
-                    placeholder="Enter start KM"            
-                  />
-                </div>
-                <div className="flex flex-col py-2">
-                  <label for="in" className="text-sm flex items-center gap-3">
-                    <FaCamera className="text-3xl text-yellow-500" />
-                    <strong> Take Photo</strong>
-                  </label>
-                  <input
-                    id="in"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                  <img src={selectImg} />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col py-1">
-                  <input
+            <>
+              <div className="flex flex-col py-1">
+                <input
+                  disabled={onPunch === "OUT" ? false : true}
                   value={startKm}
-                    type="tel"
-                    disabled
-                    className="valid:outline-none border-b-2 py-2"
-                    placeholder="Enter start KM"
-                  />
-                </div>
+                  onChange={(e) => {
+                    setStartKm(e.target.value);
+                  }}
+                  type="tel"
+                  className="valid:outline-none border-b-2 py-2"
+                  placeholder="Enter start KM"
+                />
+              </div>
+              {onPunch == "IN" ? (
                 <div className="flex flex-col py-1">
-                  <input     
-                  value={kiloMetor}
-                  onChange={(e)=>setKiloMetor(e.target.value)}     
+                  <input
+                    value={kiloMetor}
+                    onChange={(e) => {
+                      setKiloMetor(e.target.value);
+                    }}
                     type="tel"
                     className="border-b-2 py-2 valid:outline-none"
                     placeholder="Enter end KM"
                   />
                 </div>
-                <div className="flex flex-col py-2">
-                  <label for="in" className="text-sm flex items-center gap-3">
-                    <FaCamera className="text-3xl text-yellow-500" />
-                    <strong> Take Photo</strong>
-                  </label>
-                  <input
-                    id="in"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                </div>
-              </>
-            )
+              ) : (
+                ""
+              )}
+              <div className="flex flex-col py-2">
+                <label for="in" className="text-sm flex items-center gap-3">
+                  <FaCamera className="text-3xl text-yellow-500" />
+                  <strong> Take Photo</strong>
+                </label>
+                <input
+                  id="in"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => setSelectImg(e.target.files[0])}
+                />
+              </div>
+            </>
           ) : (
             ""
           )}
           <div className="flex justify-center">
-            {onPunch === "OUT" ? (
-              <button
-                className="bg-green-500 text-white p-3 rounded-xl"
-                onClick={() => setConfirModel(true)}
-              >
-                Punch IN
-              </button>
-            ) : (
-              <button
-                className="bg-green-500 text-white p-3 rounded-xl"
-                onClick={() => setConfirModel(true)}
-              >
-                Punch OUT
-              </button>
-            )}
+            <button
+              disabled={
+                onPunch === "OUT"
+                  ? !(startKm && selectImg)
+                  : !(kiloMetor && selectImg)
+              }
+              className="flex justify-center items-center disabled:bg-green-800 bg-green-500 w-40 h-12 text-white font-bold rounded-3xl"
+              onClick={() => setConfirModel(true)}
+            >
+              {loader == false ? (
+                onPunch === "OUT" ? (
+                  "Punch IN"
+                ) : (
+                  "Punch OUT"
+                )
+              ) : (
+                <ClipLoader color="#fff" />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -239,9 +273,11 @@ const PunchBoxModel = ({ close }) => {
 // Main Container
 export default function PunchBox() {
   const [modelOpen, setModelOpen] = useState(false);
+  const [punch, setPunch] = useState("OUT");
   const [time, setTime] = useState();
   const [date, setDate] = useState();
-  useEffect(() => {  
+  useEffect(() => {
+    setPunch(localStorage.getItem("Punch"));
     setDate(localStorage.getItem("Date"));
     setTime(localStorage.getItem("Time"));
   }, []);
@@ -249,7 +285,7 @@ export default function PunchBox() {
   return (
     <>
       {modelOpen && <PunchBoxModel close={() => setModelOpen(false)} />}
-      <div className="bg-blue-700 h-36 shadow-lg p-3 m-2 rounded-md flex justify-center items-center gap-5">
+      <div className="bg-blue-700 h-36 shadow-md shadow-slate-400 p-3 m-4 rounded-md flex justify-evenly items-center gap-5">
         <div className="border-2 rounded-full w-24 h-24 relative flex justify-center items-center">
           <FaUser className="text-6xl text-white " />
         </div>
@@ -265,7 +301,10 @@ export default function PunchBox() {
           className="border-2 rounded-full w-24 h-24 relative flex justify-center items-center"
           onClick={() => setModelOpen(true)}
         >
-          <FaFingerprint className="text-7xl text-white " />
+          <FaFingerprint
+            className="text-7xl"
+            color={punch == "IN" ? "green" : "white"}
+          />
         </div>
       </div>
     </>
