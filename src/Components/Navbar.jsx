@@ -4,7 +4,7 @@ import { BiBell, BiHome, BiLogOut, BiMenu } from "react-icons/bi";
 import { FaCamera, FaCopyright, FaX } from "react-icons/fa6";
 import { Link, useNavigate } from "react-router-dom";
 
-const SideNavBar = ({ close }) => {  
+const SideNavBar = ({ close }) => {
   return (
     <>
       <div
@@ -59,6 +59,34 @@ const SideNavBar = ({ close }) => {
               className="py-2 px-3 w-[100%] text-white active:bg-slate-700 focus:bg-transparent flex"
             >
               Customer Visit List
+            </Link>
+            <Link
+              to={"/addcustomer"}
+              onClick={close}
+              className="py-2 px-3 w-[100%] text-white active:bg-slate-700 focus:bg-transparent flex"
+            >
+              Add Customer
+            </Link>
+            <Link
+              to={"/state"}
+              onClick={close}
+              className="py-2 px-3 w-[100%] text-white active:bg-slate-700 focus:bg-transparent flex"
+            >
+              State
+            </Link>
+            <Link
+              to={"/city"}
+              onClick={close}
+              className="py-2 px-3 w-[100%] text-white active:bg-slate-700 focus:bg-transparent flex"
+            >
+              City
+            </Link>
+            <Link
+              to={"/area"}
+              onClick={close}
+              className="py-2 px-3 w-[100%] text-white active:bg-slate-700 focus:bg-transparent flex"
+            >
+              Area
             </Link>
           </ol>
         </div>
